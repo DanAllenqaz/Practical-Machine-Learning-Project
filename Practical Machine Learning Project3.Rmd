@@ -1,0 +1,116 @@
+---
+title: "Practical Machine Learning Project"
+author: "Dan Allen"
+date: "3/24/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Executive Summary
+The following analysis will look at Decision Tree, Random Forest and Generalized Boosted Model to determine which is the most accurate predictor.  The analysis determined the Random Forest at 99.5% was the most accurate.  I then used Random Forest on the given test data to produce our predicted results.
+
+# Acknowledgments
+The data for this project came from http://groupware.les.inf.puc-rio.br/har. Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.  For this analysis the data has been split into a training set and testing set. The test data url: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+# Summary
+To read more about the data: http://groupware.les.inf.puc-rio.br/har#wle_paper_section#ixzz6pDRBbWwY.  Using data obtained by devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it.
+
+Here I have used the data from accelerometers on the belt, forearm, arm, and dumbbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+## Data Processing
+
+### Load Libaries Download Data
+```{r Download}
+set.seed(7)
+library(lattice)
+library(ggplot2)
+library(caret)
+library(kernlab)
+library(rattle)
+library(corrplot)
+
+training <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", header = TRUE)
+testing <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", header = TRUE)
+```
+### Clean the Data
+These files contain many columns that are unnecessary for our analysis.  We therefore are removing the first 7 columns from both the ‘training’ and ‘testing’ data frames. Many columns have NA and empty values "", So we kept only data with actual data. 
+
+```{r Clean}
+train <- training[, -(1:7)]
+test <- testing[, -(1:7)]
+
+keep <- colSums(is.na(train)/dim(train)) == 0
+train <- train[, keep]
+test <- test[, keep]
+
+keep <- colSums(train == "") == 0
+train <- train[, keep]
+test <- test[, keep]
+```
+### Split the Data
+Now that the data is clean we will split the train data into two groups: trainA and trainTest. TrainA will be used to create the models which will then be tested on trainTest. Once we know the most accurate model, will then use it for the real test 
+
+```{r split train}
+part <- createDataPartition( y = train$classe,
+                             p = 0.7,
+                             list = FALSE)
+trainA <- train[part,]
+trainTest <- train[-part,]
+```
+
+## Train
+We will now run a few training models and pick the most accurate
+
+# Control
+Set up control for training to use 3-fold cross validation.
+```{r Control}
+control <- trainControl(method="cv", number=3, verboseIter=F)
+```
+
+### Decision Tree (DT)
+```{r dt}
+model_dt <- train(classe~., data=trainA, method="rpart", trControl = control, tuneLength = 5)
+fancyRpartPlot(model_dt$finalModel)
+pred_dt <- predict(model_dt, trainTest)
+cm_dt <- confusionMatrix(pred_dt, factor(trainTest$classe))
+cm_dt
+acc_dt <- cm_dt$overall[1]*100
+
+```
+
+### Random Forest (RF)
+```{r Random Forest}
+model_rf <- train(classe~., data=trainA, method="rf", trControl = control, tuneLength = 5)
+pred_rf <- predict(model_rf, trainTest)
+cm_rf <- confusionMatrix(pred_rf, factor(trainTest$classe))
+cm_rf
+acc_rf <- cm_rf$overall[1]*100
+
+```
+### Generalized Boosted Model (GBM)
+
+```{r gbm}
+model_gbm <- train(classe~., data=trainA, method="gbm", trControl = control, tuneLength = 5, verbose = FALSE)
+model_gbm
+pred_gbm <- predict(model_gbm, trainTest)
+cm_gbm <- confusionMatrix(pred_gbm, factor(trainTest$classe))
+cm_gbm
+acc_gbm <- cm_gbm$overall[1]*100
+```
+## Aanalysis
+The Most accurate test was the accuracy rate of the Random Forest Model.
+
+Decision Tree: `r sprintf(" %3.2f", acc_dt)` %
+
+Random Forest: `r sprintf(" %3.2f", acc_rf)` %
+
+Generalized Boosted Model: `r sprintf(" %3.2f", acc_gbm)` %
+
+So we will test the Random Forest against the test data.
+
+```{r Test Data}
+pred_Test <- predict(model_rf, test)
+pred_Test
+
